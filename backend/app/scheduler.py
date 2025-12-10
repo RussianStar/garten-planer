@@ -1,10 +1,16 @@
 from __future__ import annotations
 
-from datetime import date, timedelta
 from typing import Iterable
 from uuid import uuid4
 
-from .models import DurationEstimate, LifecycleArrow, PlanResult, ScheduleEvent
+from .models import (
+    DurationEstimate,
+    LifecycleArrow,
+    PlanResult,
+    PlanningProblem,
+    ScheduleEvent,
+    Strategy,
+)
 
 
 def sum_durations(durations: Iterable[DurationEstimate]) -> DurationEstimate:
@@ -18,6 +24,7 @@ def plan_linear_lifecycle(
     crop_variety_id: str,
     arrows: list[LifecycleArrow],
     sow_date: date,
+    strategy: Strategy | None = None,
 ) -> PlanResult:
     """
     Simple planner that assumes arrows are already in execution order and form
@@ -26,10 +33,11 @@ def plan_linear_lifecycle(
     """
     events: list[ScheduleEvent] = []
     cursor_date = sow_date
+    chosen_strategy = strategy or Strategy()
 
     for arrow in arrows:
         # duration window for this step
-        date_range = arrow.duration.to_date_range(cursor_date)
+        date_range = arrow.duration.to_window(cursor_date, risk_tolerance=chosen_strategy.risk_tolerance)
 
         # map lifecycle transitions to coarse schedule event kinds
         kind = classify_event_kind(arrow)
@@ -45,10 +53,30 @@ def plan_linear_lifecycle(
             )
         )
 
-        # advance cursor by typical; downstream arrows accumulate around typical
+        # advance cursor by selected typical; downstream arrows accumulate around the strategy preference
         cursor_date = date_range["typical"]
 
     return PlanResult(crop_variety_id=crop_variety_id, sow_date=sow_date, events=events)
+
+
+def plan_from_problem(problem: PlanningProblem) -> list[PlanResult]:
+    """
+    Entry point for a richer planning problem. For now we only support
+    generating one plan per goal using a linear arrow list filtered by crop.
+    """
+
+    plans: list[PlanResult] = []
+    for goal in problem.goals:
+        crop_arrows = [arrow for arrow in problem.lifecycle_arrows if arrow.crop_variety_id == goal.crop_variety_id]
+        plans.append(
+            plan_linear_lifecycle(
+                crop_variety_id=goal.crop_variety_id,
+                arrows=crop_arrows,
+                sow_date=goal.target_sow_date,
+                strategy=problem.strategy,
+            )
+        )
+    return plans
 
 
 def classify_event_kind(arrow: LifecycleArrow) -> ScheduleEvent.__fields__["kind"].type_:  # type: ignore

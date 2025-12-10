@@ -5,6 +5,7 @@ import { RangeBar } from "./components/RangeBar";
 
 export default function App() {
   const [sowDate, setSowDate] = useState<string>(todayISO());
+  const [riskTolerance, setRiskTolerance] = useState<number>(0.5);
   const [plan, setPlan] = useState<PlanResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -12,11 +13,11 @@ export default function App() {
   useEffect(() => {
     setLoading(true);
     setError(null);
-    fetchDemoPlan(sowDate)
+    fetchDemoPlan(sowDate, riskTolerance)
       .then(setPlan)
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
-  }, [sowDate]);
+  }, [sowDate, riskTolerance]);
 
   return (
     <div style={pageStyle}>
@@ -34,6 +35,21 @@ export default function App() {
             onChange={(e) => setSowDate(e.target.value)}
             style={inputStyle}
           />
+        </label>
+        <label style={{ display: "block", margin: "12px 0" }}>
+          Risk tolerance ({riskTolerance.toFixed(2)}):
+          <input
+            type="range"
+            min={0}
+            max={1}
+            step={0.05}
+            value={riskTolerance}
+            onChange={(e) => setRiskTolerance(Number(e.target.value))}
+            style={{ marginLeft: 12, width: 180 }}
+          />
+          <small style={{ display: "block", color: "#456" }}>
+            0 = cautious (use upper bounds), 1 = aggressive (lean on typical)
+          </small>
         </label>
         {loading && <p>Loading plan…</p>}
         {error && <p style={{ color: "firebrick" }}>{error}</p>}
